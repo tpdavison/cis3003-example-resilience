@@ -29,7 +29,12 @@ namespace Movies.Web
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddDbContext<MovieDbContext>(options => options.UseSqlServer(
-                Configuration.GetConnectionString("MovieConnection")));
+                Configuration.GetConnectionString("MovieConnection"),
+                sqlServerOptionsAction: sqlOptions => sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(6),
+                    errorNumbersToAdd: null)
+                ));
 
             if (Env.IsDevelopment())
             {
