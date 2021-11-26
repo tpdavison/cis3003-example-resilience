@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -11,6 +12,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Movies.Web.Data;
 using Movies.Web.Services;
+using Polly;
+using Polly.Extensions.Http;
 
 namespace Movies.Web
 {
@@ -25,6 +28,22 @@ namespace Movies.Web
 
         public IConfiguration Configuration { get; }
         public IWebHostEnvironment Env { get; }
+
+        private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+        {
+            return HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.NotFound)
+                .WaitAndRetryAsync(5, retryAttempt =>
+                    TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+        }
+
+        private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+        {
+            return HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
+        }
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -42,7 +61,9 @@ namespace Movies.Web
             }
             else
             {
-                services.AddHttpClient<IReviewsService, ReviewsService>();
+                services.AddHttpClient<IReviewsService, ReviewsService>()
+                        .AddPolicyHandler(GetRetryPolicy())
+                        .AddPolicyHandler(GetCircuitBreakerPolicy()); ;
             }
 
             services.AddControllersWithViews();
